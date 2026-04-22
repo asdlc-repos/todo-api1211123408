@@ -1,0 +1,12 @@
+bin/
+*.test
+*.out
+coverage.*
+.env
+.env.*
+.DS_Store
+.vscode/
+.idea/
+.logs/
+.mcp-config.json
+dist/

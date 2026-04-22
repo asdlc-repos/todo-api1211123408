@@ -1,0 +1,10 @@
+.git
+.gitignore
+.logs
+.mcp-config.json
+*.md
+Dockerfile
+.dockerignore
+bin/
+.vscode/
+.idea/
