@@ -1,0 +1,69 @@
+{
+  "strategy": "Bottom-Up",
+  "overview": "The todo-api has no dependencies and must be built first to provide the REST backend. The todo-web depends on todo-api and is built second, consuming its endpoints.",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Backend Foundation",
+      "description": "Build the independent Go REST API providing auth, todos, and categories.",
+      "components": [
+        {
+          "name": "todo-api",
+          "componentType": "service",
+          "language": "Go",
+          "deployment": "Docker",
+          "responsibilities": [
+            "Provide user registration, login, logout, and password reset with secure session cookies",
+            "CRUD operations for todos with optimistic locking and filtering",
+            "CRUD operations for per-user categories with cascade-unassign on delete",
+            "Enforce per-user isolation, input sanitization, and auth attempt logging",
+            "Expose /health endpoint and JSON error responses under /api/v1"
+          ],
+          "architectureContext": "Stateless Go backend on port 9090 serving the todo-web SPA over HTTPS. Uses an in-memory repository abstraction (swappable for Postgres) and issues HTTP-only session cookies consumed by the frontend.",
+          "keyConsiderations": [
+            "Use bcrypt for password hashing and 32-byte random session tokens stored server-side",
+            "Implement account lockout after 3 failed attempts (15 min) returning 423",
+            "Enforce optimistic locking via version field, returning 409 on mismatch",
+            "Structure repositories behind interfaces to enable later Postgres swap",
+            "Permissive CORS with credentials for the frontend origin; use sync.RWMutex for concurrency"
+          ],
+          "apiContract": "openapi: 3.0.3\ninfo:\n  title: Todo API\n  version: 1.0.0\nservers:\n  - url: /api/v1\npaths:\n  /health:\n    get:\n      responses:\n        '200': {description: OK}\n  /auth/register:\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              required: [email, password]\n              properties:\n                email: {type: string, format: email}\n                password: {type: string}\n      responses:\n        '201': {description: Created}\n        '400': {description: Validation error}\n  /auth/login:\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              required: [email, password]\n              properties:\n                email: {type: string}\n                password: {type: string}\n      responses:\n        '200': {description: OK, sets session cookie}\n        '401': {description: Invalid credentials}\n        '423': {description: Account locked}\n  /auth/logout:\n    post:\n      responses:\n        '204': {description: Logged out}\n  /auth/password-reset/request:\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                email: {type: string}\n      responses:\n        '202': {description: Email sent}\n  /auth/password-reset/confirm:\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                token: {type: string}\n                password: {type: string}\n      responses:\n        '200': {description: Updated}\n  /todos:\n    get:\n      parameters:\n        - {name: completed, in: query, schema: {type: boolean}}\n        - {name: categoryId, in: query, schema: {type: string}}\n        - {name: dueFrom, in: query, schema: {type: string, format: date-time}}\n        - {name: dueTo, in: query, schema: {type: string, format: date-time}}\n      responses:\n        '200':\n          description: List of todos\n          content:\n            application/json:\n              schema: {type: array, items: {$ref: '#/components/schemas/Todo'}}\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema: {$ref: '#/components/schemas/TodoInput'}\n      responses:\n        '201': {description: Created}\n        '400': {description: Validation error}\n  /todos/{id}:\n    get:\n      parameters: [{name: id, in: path, required: true, schema: {type: string}}]\n      responses:\n        '200': {description: OK}\n        '404': {description: Not found}\n    put:\n      parameters: [{name: id, in: path, required: true, schema: {type: string}}]\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema: {$ref: '#/components/schemas/TodoInput'}\n      responses:\n        '200': {description: Updated}\n        '409': {description: Version conflict}\n    delete:\n      parameters: [{name: id, in: path, required: true, schema: {type: string}}]\n      responses:\n        '204': {description: Deleted}\n  /categories:\n    get:\n      responses:\n        '200': {description: OK}\n    post:\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                name: {type: string, maxLength: 50}\n      responses:\n        '201': {description: Created}\n        '409': {description: Duplicate name}\n  /categories/{id}:\n    put:\n      parameters: [{name: id, in: path, required: true, schema: {type: string}}]\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                name: {type: string}\n      responses:\n        '200': {description: Updated}\n    delete:\n      parameters: [{name: id, in: path, required: true, schema: {type: string}}]\n      responses:\n        '204': {description: Deleted, todos unassigned}\ncomponents:\n  schemas:\n    Todo:\n      type: object\n      properties:\n        id: {type: string}\n        title: {type: string, maxLength: 200}\n        description: {type: string, maxLength: 2000}\n        dueDate: {type: string, format: date-time}\n        categoryId: {type: string, nullable: true}\n        completed: {type: boolean}\n        completedAt: {type: string, format: date-time, nullable: true}\n        version: {type: integer}\n        createdAt: {type: string, format: date-time}\n    TodoInput:\n      type: object\n      required: [title]\n      properties:\n        title: {type: string, maxLength: 200}\n        description: {type: string, maxLength: 2000}\n        dueDate: {type: string, format: date-time}\n        categoryId: {type: string, nullable: true}\n        completed: {type: boolean}\n        version: {type: integer}\n",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Frontend",
+      "description": "Build the React SPA that consumes the backend API.",
+      "components": [
+        {
+          "name": "todo-web",
+          "componentType": "web-app",
+          "language": "TypeScript / React",
+          "deployment": "Docker",
+          "responsibilities": [
+            "Provide register/login/password-reset pages wired to the backend with cookie-based auth",
+            "Render todos dashboard with filters, create/edit/delete and completion toggling",
+            "Provide category management UI",
+            "Serve SPA via nginx with /health endpoint and SPA fallback routing"
+          ],
+          "architectureContext": "Static React SPA served by nginx on port 8080. Calls todo-api at VITE_API_BASE with credentials:'include' to leverage HTTP-only session cookies.",
+          "keyConsiderations": [
+            "Never store tokens in JS; rely on HTTP-only cookies",
+            "Send version field on PUT to respect optimistic locking (handle 409s)",
+            "Surface API validation errors inline; support filter query params",
+            "nginx.conf must include try_files SPA fallback and /health location",
+            "Multi-stage Dockerfile: node build → nginx:alpine serving dist/"
+          ],
+          "apiContract": "openapi: 3.0.3\ninfo:\n  title: Todo Web (static)\n  version: 1.0.0\npaths:\n  /health:\n    get:\n      responses:\n        '200': {description: OK}\n",
+          "dependencies": [
+            "todo-api"
+          ]
+        }
+      ]
+    }
+  ],
+  "sourceSpec": "spec-v1",
+  "sourceDesign": "design-v1"
+}
