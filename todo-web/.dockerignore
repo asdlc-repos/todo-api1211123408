@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+.vite
+.git
+.gitignore
+.dockerignore
+.logs
+.mcp-config.json
+*.log
+.DS_Store
+.idea
+.vscode
+.env
+.env.*
+README.md
